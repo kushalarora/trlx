@@ -17,6 +17,7 @@ from trlx.data.ilql_types import (
     ILQLSeq2SeqElement,
 )
 from trlx.pipeline import BasePipeline, BaseRolloutStore, register_datapipeline
+from trlx.data.method_configs import MethodConfig
 
 
 @dataclass
@@ -119,6 +120,8 @@ class PromptPipeline(BasePipeline):
         tokenizer (`transformers.PreTrainedTokenizer`): a tokenizer to tokenize prompts with.
         add_special_tokens (`bool`): whether to encode prompts with tokenizer's special tokens (passed directly
             into `tokenizer.encode`)
+        config (`MethodConfig`): config with method specific hyperparameters.
+        is_eval (`bool`): whether the pipeline is used for evaluation or training.
     """
 
     def __init__(
@@ -127,6 +130,8 @@ class PromptPipeline(BasePipeline):
         max_prompt_length: int,
         tokenizer: PreTrainedTokenizer,
         add_special_tokens: bool = False,
+        config: MethodConfig = None,
+        is_eval:bool = False
     ):
         super().__init__()
 

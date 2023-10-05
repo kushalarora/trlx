@@ -3,6 +3,7 @@ from typing import Callable, List
 # Register load pipelines via module import
 from trlx.pipeline import _DATAPIPELINE
 from trlx.pipeline.offline_pipeline import PromptPipeline
+from trlx.pipeline.mpror_pipeline import MPRORPipeline
 
 # Register load trainers via module import
 from trlx.trainer import _TRAINERS, register_trainer
