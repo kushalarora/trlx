@@ -50,25 +50,29 @@ class MPRORPipeline(BasePipeline):
         assert isinstance(samples[0], dict), "prompts must be a list of dictionaries"
 
         metadata = samples
-        prompts = [x.pop("prompt") for x in metadata]
-        labels = [x.pop("label") for x in metadata]
+        prompts = [x["prompt"] for x in metadata]
+        labels = [" "  + x["label"] for x in metadata]
 
         model_prompts = tokenizer(
-            prompts, truncation=True, padding=False, max_length=max_prompt_length - config.max_rollin_length,
+            prompts, truncation=True, padding=False, max_length=max_prompt_length,
             add_special_tokens=add_special_tokens,
         )
         model_labels = tokenizer(
-            prompts, truncation=True, padding=False, max_length=config.max_rollin_length,
+            labels, truncation=True, padding=False, max_length=config.max_rollin_length,
             add_special_tokens=add_special_tokens,
         )
 
         new_prompts = []
         new_attentions = []
+        mpror_prompts_and_labels = []
         if is_eval:
-            new_prompts = prompts
+            prompts_tokens = model_prompts['input_ids']
+            attention_mask = model_prompts['attention_mask']
         else:
             for (prompt, label, prompt_attention, label_attention) in zip(model_prompts['input_ids'], model_labels['input_ids'], 
                                         model_prompts['attention_mask'], model_labels['attention_mask']):
+                prompt_str = tokenizer.decode(prompt)
+                label_str = tokenizer.decode(label)
                 num_label_tokens = len(label)
                 num_rollouts = min(config.max_num_rollouts, 
                                     num_label_tokens // config.interval)
@@ -78,11 +82,26 @@ class MPRORPipeline(BasePipeline):
                     new_prompts.append(prompt)
                     new_attentions.append(prompt_attention)
                     num_rollouts -= 1
+                    mpror_prompt = tokenizer.decode(prompt)
+                    mpror_label = tokenizer.decode(label)
+                    mpror_prompts_and_labels.append({
+                        'mpror_prompt': mpror_prompt,
+                        'mpror_label': mpror_label,
+                        'prompt': prompt_str,
+                        'label': label_str,
+                    })
                 if num_rollouts > 0 and not config.exclude_last:
-                    new_prompts.append(prompt + label)
+                    new_prompts.append(prompt + label[:-1])
                     new_attentions.append(prompt_attention + label_attention)
                     num_rollouts -= 1
-                
+                    mpror_prompt = tokenizer.decode(prompt)
+                    mpror_label = tokenizer.decode(label)
+                    mpror_prompts_and_labels.append({
+                        'mpror_prompt': mpror_prompt,
+                        'mpror_label': mpror_label,
+                        'prompt': prompt_str,
+                        'label': label_str,
+                    })
                 rollin_intervals = range(0, max_rollin_length, config.interval)
                 for l in sorted(np.random.choice(rollin_intervals, num_rollouts, replace=False)):
                     rollin_prompt_suffix = label[:l]
@@ -91,14 +110,21 @@ class MPRORPipeline(BasePipeline):
                     rollout_attention = prompt_attention + rollin_attention_suffix
                     new_prompts.append(rollout_prompt)
                     new_attentions.append(rollout_attention)
-
+                    mpror_prompt = tokenizer.decode(prompt)
+                    mpror_label = tokenizer.decode(label)
+                    mpror_prompts_and_labels.append({
+                        'mpror_prompt': mpror_prompt,
+                        'mpror_label': mpror_label,
+                        'prompt': prompt_str,
+                        'label': label_str,
+                    })   
                 # shuffle_ix = np.random.permutation(len(new_prompts))
                 # new_prompts = new_prompts[shuffle_ix]
         
 
-        prompts_tokens = new_prompts
-        attention_mask = new_attentions
-
+            prompts_tokens = new_prompts
+            attention_mask = new_attentions
+            metadata = mpror_prompts_and_labels
 
         self.tokenizer = tokenizer
         self.prompts = [
