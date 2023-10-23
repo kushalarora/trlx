@@ -9,7 +9,7 @@ logger = logging.get_logger(__name__)
 
 
 @register_trainer
-class AccelerateMPRORTrainer(AcceleratePPOTrainer):
+class AcceleratePPOMultiTrainer(AcceleratePPOTrainer):
     """PPO Accelerate Trainer"""
     def __init__(self, config: TRLConfig, **kwargs):
         """PPO Accelerate Trainer initialization

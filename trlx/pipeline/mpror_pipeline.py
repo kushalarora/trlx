@@ -8,7 +8,7 @@ from trlx.models.modeling_mpror import MPRORConfig
 
 from trlx.pipeline import BasePipeline, register_datapipeline
 from torch.utils.data import IterableDataset
-from trlx.data.default_configs import default_ppo_config
+from trlx.data.default_configs import default_mpror_config
 
 from trlx.data.method_configs import MethodConfig
 
@@ -43,11 +43,17 @@ class MPRORPipeline(BasePipeline):
         super().__init__()
 
         if not config:
-            config = default_ppo_config().method
+            config = default_mpror_config().method
 
         assert isinstance(config, MPRORConfig), "config must be an instance of MPRORConfig"
 
         assert isinstance(samples[0], dict), "prompts must be a list of dictionaries"
+
+        self.config = config
+        self.is_eval = is_eval
+        self.is_seq2seq = is_seq2seq
+        self.max_num_rollouts = 1 if is_eval else config.max_num_rollouts
+        self.add_special_tokens = add_special_tokens
 
         metadata = samples
         prompts = [x["prompt"] for x in metadata]
@@ -57,75 +63,13 @@ class MPRORPipeline(BasePipeline):
             prompts, truncation=True, padding=False, max_length=max_prompt_length,
             add_special_tokens=add_special_tokens,
         )
-        model_labels = tokenizer(
-            labels, truncation=True, padding=False, max_length=config.max_rollin_length,
-            add_special_tokens=add_special_tokens,
-        )
-
+       
         new_prompts = []
         new_attentions = []
         mpror_prompts_and_labels = []
-        if is_eval:
-            prompts_tokens = model_prompts['input_ids']
-            attention_mask = model_prompts['attention_mask']
-        else:
-            for (prompt, label, prompt_attention, label_attention) in zip(model_prompts['input_ids'], model_labels['input_ids'], 
-                                        model_prompts['attention_mask'], model_labels['attention_mask']):
-                prompt_str = tokenizer.decode(prompt)
-                label_str = tokenizer.decode(label)
-                num_label_tokens = len(label)
-                num_rollouts = min(config.max_num_rollouts, 
-                                    num_label_tokens // config.interval)
-                max_rollin_length = min(num_label_tokens, config.max_rollin_length)
-
-                if num_rollouts > 0 and not config.exclude_first:
-                    new_prompts.append(prompt)
-                    new_attentions.append(prompt_attention)
-                    num_rollouts -= 1
-                    mpror_prompt = tokenizer.decode(prompt)
-                    mpror_label = tokenizer.decode(label)
-                    mpror_prompts_and_labels.append({
-                        'mpror_prompt': mpror_prompt,
-                        'mpror_label': mpror_label,
-                        'prompt': prompt_str,
-                        'label': label_str,
-                    })
-                if num_rollouts > 0 and not config.exclude_last:
-                    new_prompts.append(prompt + label[:-1])
-                    new_attentions.append(prompt_attention + label_attention)
-                    num_rollouts -= 1
-                    mpror_prompt = tokenizer.decode(prompt)
-                    mpror_label = tokenizer.decode(label)
-                    mpror_prompts_and_labels.append({
-                        'mpror_prompt': mpror_prompt,
-                        'mpror_label': mpror_label,
-                        'prompt': prompt_str,
-                        'label': label_str,
-                    })
-                rollin_intervals = range(0, max_rollin_length, config.interval)
-                for l in sorted(np.random.choice(rollin_intervals, num_rollouts, replace=False)):
-                    rollin_prompt_suffix = label[:l]
-                    rollin_attention_suffix = label_attention[:l]
-                    rollout_prompt = prompt + rollin_prompt_suffix
-                    rollout_attention = prompt_attention + rollin_attention_suffix
-                    new_prompts.append(rollout_prompt)
-                    new_attentions.append(rollout_attention)
-                    mpror_prompt = tokenizer.decode(prompt)
-                    mpror_label = tokenizer.decode(label)
-                    mpror_prompts_and_labels.append({
-                        'mpror_prompt': mpror_prompt,
-                        'mpror_label': mpror_label,
-                        'prompt': prompt_str,
-                        'label': label_str,
-                    })   
-                # shuffle_ix = np.random.permutation(len(new_prompts))
-                # new_prompts = new_prompts[shuffle_ix]
-        
-
-            prompts_tokens = new_prompts
-            attention_mask = new_attentions
-            metadata = mpror_prompts_and_labels
-
+        prompts_tokens = model_prompts['input_ids']
+        attention_mask = model_prompts['attention_mask']
+     
         self.tokenizer = tokenizer
         self.prompts = [
             {"input_ids": tokens, "attention_mask": mask, **metadata}
@@ -140,19 +84,50 @@ class MPRORPipeline(BasePipeline):
 
     def create_loader(self, batch_size: int, shuffle=False, sampler=None, drop_last=False) -> DataLoader:
         def collate_fn(xs):
-            out = self.tokenizer.pad([{"input_ids": x["input_ids"]} for x in xs], return_tensors="pt")
+            labels = [" "  + x["label"] for x in xs]
+
+            model_labels = self.tokenizer(labels, truncation=True, padding=False, 
+                            max_length=self.config.max_rollin_length, add_special_tokens=self.add_special_tokens,)
+
+            prompts_tokens = [x["input_ids"] for x in xs]
+            label_tokens = model_labels['input_ids']
+            if not self.is_eval:
+                new_prompts = []
+                for (prompt, label) in zip(prompts_tokens, label_tokens):
+                    num_label_tokens = len(label)
+                    num_rollouts = min(self.config.max_num_rollouts, 
+                                        num_label_tokens // self.config.interval)
+
+                    start_index = 0
+                    end_index = num_label_tokens
+                    if self.config.exclude_first:
+                        start_index += 1
+
+                    if self.config.exclude_last:
+                        end_index -= 1
+
+                    max_rollin_length = min(end_index, self.config.max_rollin_length)
+
+                    rollin_intervals = range(start_index, max_rollin_length, self.config.interval)
+                    for l in sorted(np.random.choice(rollin_intervals, num_rollouts, replace=False)):
+                        rollin_prompt_suffix = label[:l]
+                        rollout_prompt = prompt + rollin_prompt_suffix
+                        new_prompts.append(rollout_prompt)
+
+                prompts_tokens = new_prompts
+
+            out = self.tokenizer.pad([{"input_ids": x} for x in prompts_tokens], return_tensors="pt")
 
             for key in xs[0]:
                 if key != "input_ids" and key != "attention_mask":
-                    out[key] = [x[key] for x in xs]
-
+                    out[key] = [x[key] for x in xs for _ in range(self.max_num_rollouts)]
             return out
 
         # Since all data is already pre-processed, no need to have
         # multi-process data loading
         return DataLoader(
             self,
-            batch_size=batch_size,
+            batch_size=batch_size//self.max_num_rollouts,
             collate_fn=collate_fn,
             shuffle=shuffle,
             sampler=sampler,

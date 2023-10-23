@@ -4,6 +4,7 @@ from typing import Callable, List
 from trlx.pipeline import _DATAPIPELINE
 from trlx.pipeline.offline_pipeline import PromptPipeline
 from trlx.pipeline.mpror_pipeline import MPRORPipeline
+from trlx.pipeline.ppo_multi_pipeline import PPOMultiPipeline
 
 # Register load trainers via module import
 from trlx.trainer import _TRAINERS, register_trainer
@@ -11,6 +12,7 @@ from trlx.trainer.accelerate_ilql_trainer import AccelerateILQLTrainer
 from trlx.trainer.accelerate_ppo_trainer import AcceleratePPOTrainer
 from trlx.trainer.accelerate_sft_trainer import AccelerateSFTTrainer
 from trlx.trainer.accelerate_mpror_trainer import AccelerateMPRORTrainer
+from trlx.trainer.accelerate_ppo_multi_trainer import AcceleratePPOMultiTrainer
 
 try:
     from trlx.trainer.nemo_ilql_trainer import NeMoILQLTrainer
