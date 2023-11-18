@@ -42,3 +42,11 @@ class MPRORConfig(PPOConfig):
         default=False,
         metadata={"help": "Do not rollout at last step (t=T)."},
     )
+    must_include_first: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Do not rollout at first step (t=0)."},
+    )
+    must_include_last: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Do not rollout at last step (t=T)."},
+    )

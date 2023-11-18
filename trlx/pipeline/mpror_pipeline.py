@@ -98,18 +98,28 @@ class MPRORPipeline(BasePipeline):
                     num_rollouts = min(self.config.max_num_rollouts, 
                                         num_label_tokens // self.config.interval)
 
+                    intervals = []
                     start_index = 0
                     end_index = num_label_tokens
                     if self.config.exclude_first:
                         start_index += 1
+                    elif self.config.must_include_first:
+                        intervals.append(0)
+                        start_index += 1
+                        num_rollouts -= 1
 
                     if self.config.exclude_last:
                         end_index -= 1
+                    elif self.config.must_include_last:
+                        intervals.append(end_index)
+                        end_index -= 1
+                        num_rollouts -= 1
 
                     max_rollin_length = min(end_index, self.config.max_rollin_length)
 
                     rollin_intervals = range(start_index, max_rollin_length, self.config.interval)
-                    for l in sorted(np.random.choice(rollin_intervals, num_rollouts, replace=False)):
+                    intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=False))
+                    for l in sorted(intervals):
                         rollin_prompt_suffix = label[:l]
                         rollout_prompt = prompt + rollin_prompt_suffix
                         new_prompts.append(rollout_prompt)
