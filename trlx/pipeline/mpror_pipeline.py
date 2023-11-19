@@ -35,6 +35,7 @@ class MPRORPipeline(BasePipeline):
         samples: Union[List[Dict[str, Any]], List[str]],
         max_prompt_length: int,
         tokenizer: PreTrainedTokenizer,
+        total_epochs: int,
         add_special_tokens: bool = False,
         config: MethodConfig = None, 
         is_eval: bool = False,
@@ -54,6 +55,8 @@ class MPRORPipeline(BasePipeline):
         self.is_seq2seq = is_seq2seq
         self.max_num_rollouts = 1 if is_eval else config.max_num_rollouts
         self.add_special_tokens = add_special_tokens
+        self.total_epochs = total_epochs
+        self.curr_epoch = -1
 
         metadata = samples
         prompts = [x["prompt"] for x in metadata]
@@ -69,7 +72,7 @@ class MPRORPipeline(BasePipeline):
         mpror_prompts_and_labels = []
         prompts_tokens = model_prompts['input_ids']
         attention_mask = model_prompts['attention_mask']
-     
+
         self.tokenizer = tokenizer
         self.prompts = [
             {"input_ids": tokens, "attention_mask": mask, **metadata}
@@ -90,9 +93,12 @@ class MPRORPipeline(BasePipeline):
                             max_length=self.config.max_rollin_length, add_special_tokens=self.add_special_tokens,)
 
             prompts_tokens = [x["input_ids"] for x in xs]
+            indexes = [0] * len(prompts_tokens)
+
             label_tokens = model_labels['input_ids']
             if not self.is_eval:
                 new_prompts = []
+                indexes = []
                 for (prompt, label) in zip(prompts_tokens, label_tokens):
                     num_label_tokens = len(label)
                     num_rollouts = min(self.config.max_num_rollouts, 
@@ -118,20 +124,28 @@ class MPRORPipeline(BasePipeline):
                     max_rollin_length = min(end_index, self.config.max_rollin_length)
 
                     rollin_intervals = range(start_index, max_rollin_length, self.config.interval)
-                    intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=False))
+                    interval_length = len(rollin_intervals)
+                    dist_weights = np.array([np.sin(np.pi * i/(interval_length - 1)/2 + 
+                                            np.pi * self.curr_epoch/(self.total_epochs - 1)/2)
+                                            for i in range(interval_length)])
+                    dist_weights = np.array(dist_weights) / np.sum(dist_weights)
+                    intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=False, p=dist_weights))
                     for l in sorted(intervals):
                         rollin_prompt_suffix = label[:l]
                         rollout_prompt = prompt + rollin_prompt_suffix
                         new_prompts.append(rollout_prompt)
+                        indexes.append(l)
 
                 prompts_tokens = new_prompts
 
-            out = self.tokenizer.pad([{"input_ids": x} for x in prompts_tokens], return_tensors="pt")
+            out = self.tokenizer.pad([{"input_ids": x} for idx, x in zip(indexes, prompts_tokens)], return_tensors="pt")
 
             for key in xs[0]:
                 if key != "input_ids" and key != "attention_mask":
                     out[key] = [x[key] for x in xs for _ in range(self.max_num_rollouts)]
             return out
+
+        self.curr_epoch += 1
 
         # Since all data is already pre-processed, no need to have
         # multi-process data loading
