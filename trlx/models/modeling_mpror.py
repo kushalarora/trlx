@@ -50,3 +50,15 @@ class MPRORConfig(PPOConfig):
         default=False,
         metadata={"help": "Do not rollout at last step (t=T)."},
     )
+    use_sampling_curriculum: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Do not rollout at last step (t=T)."},
+    )
+    sampling_curr_coeff: Optional[int] = field(
+        default=3,
+        metadata={"help": "Do not rollout at last step (t=T)."},
+    )
+    shifting_frac: Optional[float] = field(
+        default=0.8,
+        metadata={"help": "Do not rollout at last step (t=T)."},
+    )

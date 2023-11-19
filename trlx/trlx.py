@@ -96,7 +96,7 @@ def train(  # noqa: C901
 
         pipeline = get_pipeline(config.train.pipeline)(
             prompts, max_prompt_length, trainer.tokenizer, add_special_tokens=config.model.model_arch_type == "seq2seq", 
-            config=config.method, is_eval=False, total_epochs=config.train.epochs,
+            config=config.method, is_eval=False, total_steps=config.train.epochs * config.method.num_rollouts,
         )
         trainer.add_prompt_pipeline(pipeline)
 
@@ -120,7 +120,7 @@ def train(  # noqa: C901
         raise ValueError("Either `samples` or `reward_fn` should be given for training")
 
     eval_pipeline = get_pipeline(config.train.pipeline)(
-        eval_prompts, max_prompt_length, trainer.tokenizer, add_special_tokens=config.model.model_arch_type == "seq2seq", config=config.method, is_eval=True, total_epochs=config.train.epochs
+        eval_prompts, max_prompt_length, trainer.tokenizer, add_special_tokens=config.model.model_arch_type == "seq2seq", config=config.method, is_eval=True, total_steps=config.train.epochs * config.method.num_rollouts,
     )
     trainer.add_eval_pipeline(eval_pipeline)
 

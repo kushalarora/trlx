@@ -35,7 +35,7 @@ class MPRORPipeline(BasePipeline):
         samples: Union[List[Dict[str, Any]], List[str]],
         max_prompt_length: int,
         tokenizer: PreTrainedTokenizer,
-        total_epochs: int,
+        total_steps: int,
         add_special_tokens: bool = False,
         config: MethodConfig = None, 
         is_eval: bool = False,
@@ -55,8 +55,8 @@ class MPRORPipeline(BasePipeline):
         self.is_seq2seq = is_seq2seq
         self.max_num_rollouts = 1 if is_eval else config.max_num_rollouts
         self.add_special_tokens = add_special_tokens
-        self.total_epochs = total_epochs
-        self.curr_epoch = -1
+        self.total_steps = total_steps
+        self.curr_step = -1
 
         metadata = samples
         prompts = [x["prompt"] for x in metadata]
@@ -88,7 +88,8 @@ class MPRORPipeline(BasePipeline):
     def create_loader(self, batch_size: int, shuffle=False, sampler=None, drop_last=False) -> DataLoader:
         def collate_fn(xs):
             labels = [" "  + x["label"] for x in xs]
-
+            self.curr_step += 1
+            
             model_labels = self.tokenizer(labels, truncation=True, padding=False, 
                             max_length=self.config.max_rollin_length, add_special_tokens=self.add_special_tokens,)
 
@@ -125,9 +126,17 @@ class MPRORPipeline(BasePipeline):
 
                     rollin_intervals = range(start_index, max_rollin_length, self.config.interval)
                     interval_length = len(rollin_intervals)
-                    dist_weights = np.array([np.sin(np.pi * i/(interval_length - 1)/2 + 
-                                            np.pi * self.curr_epoch/(self.total_epochs - 1)/2)
+                    # dist_weights = np.array([np.sin(np.pi * i/(interval_length - 1)/2 + 
+                    #                         np.pi * self.curr_step/(self.total_steps - 1)/2)
+                    #                         for i in range(interval_length)])
+
+                    dist_weights = np.ones(interval_length)
+                    if self.config.use_sampling_curriculum:
+                        dist_weights = np.array([np.exp(
+                            (self.config.shifting_frac * self.total_steps - self.curr_step)/self.total_steps * 
+                            (i - interval_length) / interval_length)**self.config.sampling_curr_coeff
                                             for i in range(interval_length)])
+
                     dist_weights = np.array(dist_weights) / np.sum(dist_weights)
                     intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=False, p=dist_weights))
                     for l in sorted(intervals):
@@ -145,7 +154,6 @@ class MPRORPipeline(BasePipeline):
                     out[key] = [x[key] for x in xs for _ in range(self.max_num_rollouts)]
             return out
 
-        self.curr_epoch += 1
 
         # Since all data is already pre-processed, no need to have
         # multi-process data loading
