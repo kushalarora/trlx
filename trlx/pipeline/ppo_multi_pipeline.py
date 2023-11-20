@@ -33,7 +33,7 @@ class PPOMultiPipeline(BasePipeline):
         prompts: Union[List[Dict[str, Any]], List[str]],
         max_prompt_length: int,
         tokenizer: PreTrainedTokenizer,
-        total_epochs: int,
+        total_steps: int,
         add_special_tokens: bool = False,
         config: MethodConfig = None,
         is_eval:bool = False
