@@ -99,7 +99,7 @@ class PPOMultiPipeline(BasePipeline):
 
             for key in xs[0]:
                 if key != "input_ids" and key != "attention_mask":
-                    out[key] = [x[key] for x in xs]
+                    out[key] = [x[key] for x in xs for _ in range(self.max_num_rollouts)]
 
             return out
 
