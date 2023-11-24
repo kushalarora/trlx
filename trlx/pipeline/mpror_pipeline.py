@@ -130,6 +130,8 @@ class MPRORPipeline(BasePipeline):
                     #                         np.pi * self.curr_step/(self.total_steps - 1)/2)
                     #                         for i in range(interval_length)])
 
+                    num_rollouts = min(num_rollouts, interval_length)
+                    
                     dist_weights = np.ones(interval_length)
                     if self.config.use_sampling_curriculum:
                         dist_weights = np.array([np.exp(
