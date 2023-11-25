@@ -111,14 +111,11 @@ class MPRORPipeline(BasePipeline):
             if self.is_eval:
                 return out
 
-
-
             new_prompts = []
             indexes = []
             for (prompt, label) in zip(prompts_tokens, label_tokens):
                 num_label_tokens = len(label)
-                num_rollouts = min(self.config.max_num_rollouts, 
-                                    num_label_tokens // self.config.interval)
+                num_rollouts = self.config.max_num_rollouts
 
                 intervals = []
                 start_index = 0
@@ -153,7 +150,8 @@ class MPRORPipeline(BasePipeline):
                                         for i in range(interval_length)])
 
                 dist_weights = np.array(dist_weights) / np.sum(dist_weights)
-                intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=False, p=dist_weights))
+                intervals += list(np.random.choice(rollin_intervals, num_rollouts, replace=True, p=dist_weights))
+
                 for l in sorted(intervals):
                     rollin_prompt_suffix = label[:l]
                     rollout_prompt = prompt + rollin_prompt_suffix

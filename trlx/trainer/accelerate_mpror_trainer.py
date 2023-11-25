@@ -82,6 +82,8 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
 
             str_prompts.append(str_prompt)
             str_outputs.append(str_output)
+
+            sample = str_prompt + str_output
             str_samples.append(sample)
 
         return str_samples, str_prompts, str_outputs
