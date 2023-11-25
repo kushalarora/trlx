@@ -165,7 +165,7 @@ class MPRORPipeline(BasePipeline):
 
             out['augmented_input_ids'] = new_tokenized_prompts['input_ids']
             out['augmented_attention_mask'] = new_tokenized_prompts['attention_mask']
-            out['augmented_indexes'] = torch.tensor(indexes)
+            out['augmented_indexes'] = indexes
 
             return out
 
