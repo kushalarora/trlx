@@ -113,7 +113,9 @@ class MPRORPipeline(BasePipeline):
 
             new_prompts = []
             indexes = []
-            for (prompt, label) in zip(prompts_tokens, label_tokens):
+            pct_rollouts = []
+            prompt_idxs = []
+            for idx, (prompt, label) in enumerate(zip(prompts_tokens, label_tokens)):
                 num_label_tokens = len(label)
                 num_rollouts = self.config.max_num_rollouts
 
@@ -157,6 +159,8 @@ class MPRORPipeline(BasePipeline):
                     rollout_prompt = prompt + rollin_prompt_suffix
                     new_prompts.append(rollout_prompt)
                     indexes.append(l)
+                    pct_rollouts.append(l/max_rollin_length)
+                    prompt_idxs.append(idx)
 
             new_tokenized_prompts = self.tokenizer.pad([{"input_ids": x} for x in  new_prompts], return_tensors="pt")
 
@@ -164,7 +168,8 @@ class MPRORPipeline(BasePipeline):
             out['augmented_input_ids'] = new_tokenized_prompts['input_ids']
             out['augmented_attention_mask'] = new_tokenized_prompts['attention_mask']
             out['augmented_indexes'] = indexes
-
+            out['pct_rollouts'] = pct_rollouts
+            out['prompt_idxs'] = prompt_idxs
             return out
 
 
