@@ -59,10 +59,15 @@ def default_mpror_config():
             ),
             interval=3,
             max_num_rollouts=10,
-            max_rollin_length=128,
-            max_rollout_length=128,
+            max_rollin_length=40,
+            max_rollout_length=40,
             exclude_first=False,
             exclude_last=False,
+            must_include_first=False,
+            must_include_last=False,
+            use_sampling_curriculum=False,
+            sampling_curr_coeff=3,
+            shifting_frac=0.2,
         ),
     )
 
