@@ -147,7 +147,7 @@ class MPRORPipeline(BasePipeline):
                 dist_weights = np.ones(interval_length)
                 if self.config.use_sampling_curriculum:
                     dist_weights = np.array([np.exp(
-                        (self.config.shifting_frac * self.total_steps - self.curr_step)/self.total_steps * 
+                        (1 - self.curr_step/(self.config.shifting_frac * self.total_steps)) * 
                         (i - interval_length) / interval_length)**self.config.sampling_curr_coeff
                                         for i in range(interval_length)])
 
