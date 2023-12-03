@@ -62,3 +62,7 @@ class MPRORConfig(PPOConfig):
         default=0.8,
         metadata={"help": "Do not rollout at last step (t=T)."},
     )
+    propagate_gradients: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Should we propagate gradient back to rollins?."},
+    )

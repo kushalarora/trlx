@@ -8,20 +8,17 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
-import transformers
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
 
 
 import trlx.utils.logging as logging
 from trlx.data.accelerate_base_datatypes import PromptBatch
 from trlx.data.configs import TRLConfig
-from trlx.data.ppo_types import PPORLBatch, PPORLElement
+from trlx.data.ppo_types import PPORLElement
 from trlx.trainer import register_trainer
 from trlx.trainer.accelerate_ppo_trainer import AcceleratePPOTrainer
-from trlx.utils import Clock, infinite_dataloader
-from trlx.utils.modeling import RunningMoments, gather_dict, logprobs_of_labels
+from trlx.utils import Clock
+from trlx.utils.modeling import gather_dict, logprobs_of_labels
 
 logger = logging.get_logger(__name__)
 
@@ -39,6 +36,8 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
         if config.train.minibatch_size is None:
             config.train.minibatch_size = config.train.batch_size
         config.train.batch_size = config.train.batch_size * config.method.max_num_rollouts
+        self.propagate_gradients = config.method.propagate_gradients
+
         super().__init__(config, **kwargs)
 
     def decode(
@@ -117,6 +116,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
         accumulated_stats = []
         score_diffs = []
         pct_rollouts = []
+
         while len(ppo_rl_elements) < num_rollouts:
             stats = {}
             # Get next batch in prompt dataset
@@ -128,8 +128,14 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
             samples = self.generate(batch["augmented_input_ids"], batch["augmented_attention_mask"])
             stats["time/rollout_generate"] = time() - rollout_generate_time
 
-            prompt_tensors = batch.input_ids
+            prompt_tensors = batch.input_ids if self.propagate_gradients else batch.augmented_input_ids
+
             augmented_prompts = batch.augmented_input_ids
+
+            indexes = torch.tensor(batch.augmented_indexes, device=samples.device)
+            to_mask_idxs = torch.arange(samples.shape[1], device=samples.device).unsqueeze(0) > samples.shape[1] - indexes.unsqueeze(1) - 1
+            samples[to_mask_idxs] = self.tokenizer.pad_token_id
+
             device = samples.device
             # stats["mpror/pct_rollouts"] = batch.pct_rollouts
             stats["mpror/mean_pct_rollouts"] = np.mean(batch.pct_rollouts)
@@ -198,6 +204,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
                     first_idx_score = score
                     continue
                 batch_score_diffs.append(float(score - first_idx_score))
+
             # stats['mpror/score_diffs'] = score_diffs
             stats['mpror/mean_score_diffs'] = np.mean(batch_score_diffs)
             score_diffs.append(batch_score_diffs)

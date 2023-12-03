@@ -2,13 +2,11 @@
 
 from typing import Any, Dict, List, Union
 import numpy as np
-import torch
 from transformers import PreTrainedTokenizer
 from torch.utils.data import DataLoader
 from trlx.models.modeling_mpror import MPRORConfig
 
 from trlx.pipeline import BasePipeline, register_datapipeline
-from torch.utils.data import IterableDataset
 from trlx.data.default_configs import default_mpror_config
 
 from trlx.data.method_configs import MethodConfig
