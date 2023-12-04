@@ -58,19 +58,19 @@ class PPOMultiPipeline(BasePipeline):
         prompts_tokens = model_inputs["input_ids"]
         attention_mask = model_inputs["attention_mask"]
 
-        # new_prompts = []
-        # new_attentions = []
-        # new_metadata = []
-        # if not is_eval:
-        #     for (prompt, prompt_attention, md) in zip(prompts_tokens, attention_mask, metadata):
-        #         num_rollouts = config.max_num_rollouts
-        #         for _ in range(num_rollouts):
-        #             new_prompts.append(prompt)
-        #             new_attentions.append(prompt_attention)
-        #             new_metadata.append(md)
-        #     prompts_tokens = new_prompts
-        #     attention_mask = new_attentions
-        #     metadata = new_metadata
+        new_prompts = []
+        new_attentions = []
+        new_metadata = []
+        if not is_eval:
+            for (prompt, prompt_attention, md) in zip(prompts_tokens, attention_mask, metadata):
+                num_rollouts = config.max_num_rollouts
+                for _ in range(num_rollouts):
+                    new_prompts.append(prompt)
+                    new_attentions.append(prompt_attention)
+                    new_metadata.append(md)
+            prompts_tokens = new_prompts
+            attention_mask = new_attentions
+            metadata = new_metadata
 
         self.tokenizer = tokenizer
         self.prompts = [
@@ -86,20 +86,11 @@ class PPOMultiPipeline(BasePipeline):
 
     def create_loader(self, batch_size: int, shuffle=False, sampler=None, drop_last=False) -> DataLoader:
         def collate_fn(xs):
-            input_ids = []
-            if not self.is_eval:
-                for x in xs:
-                    for _ in range(self.max_num_rollouts):
-                        input_ids.append({'input_ids': x["input_ids"]})
-            else:
-                for x in xs:
-                    input_ids.append({'input_ids': x["input_ids"]})
-            
-            out = self.tokenizer.pad(input_ids, return_tensors="pt")
+            out = self.tokenizer.pad([{"input_ids": x["input_ids"]} for x in xs], return_tensors="pt")
 
             for key in xs[0]:
                 if key != "input_ids" and key != "attention_mask":
-                    out[key] = [x[key] for x in xs for _ in range(self.max_num_rollouts)]
+                    out[key] = [x[key] for x in xs]
 
             return out
 
