@@ -66,3 +66,7 @@ class MPRORConfig(PPOConfig):
         default=False,
         metadata={"help": "Should we propagate gradient back to rollins?."},
     )
+    discount_rollins: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Should we Discount Rollins?."},
+    )

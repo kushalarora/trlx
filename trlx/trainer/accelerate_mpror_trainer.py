@@ -37,7 +37,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
             config.train.minibatch_size = config.train.batch_size
         config.train.batch_size = config.train.batch_size * config.method.max_num_rollouts
         self.propagate_gradients = config.method.propagate_gradients
-
+        self.discount_rollins = config.method.discount_rollins
         super().__init__(config, **kwargs)
 
     def decode(
@@ -126,6 +126,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
 
             # Generate samples from the language model (similar to using HuggingFace `generate` method)
             samples = self.generate(batch["augmented_input_ids"], batch["augmented_attention_mask"])
+
             stats["time/rollout_generate"] = time() - rollout_generate_time
 
             prompt_tensors = batch.input_ids if self.propagate_gradients else batch.augmented_input_ids
@@ -152,6 +153,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
             gathered_samples = self.accelerator.gather(padded_samples)
             gathered_prompts = self.accelerator.gather(padded_prompts)
             gathered_prompt_sizes = self.accelerator.gather(prompt_sizes)
+            gathered_indexes = self.accelerator.gather(indexes)
             metadata = gather_dict({k: v for k, v in batch.items() if k != "input_ids" and k != "attention_mask" and k != 'augmented_input_ids' and k != 'augmented_attention_mask'})
 
             if self.accelerator.is_main_process:
@@ -159,6 +161,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
                     gathered_prompts, gathered_samples, gathered_prompt_sizes, append_eos_token=True
                 )
 
+                rollout_len = samples.shape[1]
                 rollout_score_time = time()
                 # reward_fn should return list of rewards at each token per sample
                 # NOTE: all_scores[0][i] is the reward due to token (action) i in prompt + response (b/c of how kl is computed)
@@ -169,12 +172,22 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
                     tokenizer=self.tokenizer,
                     **metadata,
                 )
-                all_scores = [
-                    torch.tensor(score, dtype=torch.float, device=device).view(
-                        -1,
-                    )
-                    for score in all_scores
-                ]
+
+                if self.discount_rollins:
+                    all_scores = [
+                        torch.tensor(score * np.exp(-1*index/rollout_len), dtype=torch.float, device=device).view(
+                            -1,
+                        ) 
+                        for score, index in zip(all_scores, gathered_indexes.tolist())
+                    ]
+                else:
+                    all_scores = [
+                        torch.tensor(score, dtype=torch.float, device=device).view(
+                            -1,
+                        ) 
+                        for score in all_scores
+                    ]
+
                 # Pad 0 reward on the ends
                 all_scores = pad_sequence(all_scores, batch_first=True, padding_value=-np.inf)
                 max_len = torch.tensor(all_scores.shape[1], dtype=torch.long, device=device)
