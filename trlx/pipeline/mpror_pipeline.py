@@ -124,14 +124,14 @@ class MPRORPipeline(BasePipeline):
                     start_index += 1
                 elif self.config.must_include_first:
                     intervals.append(0)
-                    start_index += 1
+                    # start_index += 1
                     num_rollouts -= 1
 
                 if self.config.exclude_last:
                     end_index -= 1
                 elif self.config.must_include_last:
                     intervals.append(end_index)
-                    end_index -= 1
+                    # end_index -= 1
                     num_rollouts -= 1
 
                 max_rollin_length = min(end_index, self.config.max_rollin_length)
