@@ -43,7 +43,7 @@ def default_mpror_config():
             target=None,
             horizon=10000,
             gamma=1,
-            lam=0.95,
+            lam=1,
             cliprange=0.2,
             cliprange_value=0.2,
             vf_coef=1,

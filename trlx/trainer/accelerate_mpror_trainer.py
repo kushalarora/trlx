@@ -208,19 +208,19 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
             scores_mask = scores != -np.inf
 
             str_samples, str_prompts, str_outputs = self.decode(prompt_tensors, samples, append_eos_token=True)
-            batch_score_diffs = []
-            prev_prompt_idx = -1
-            first_idx_score = 0
-            for prompt_idx,score in zip(batch.prompt_idxs, scores):
-                if prompt_idx != prev_prompt_idx:
-                    prev_prompt_idx = prompt_idx
-                    first_idx_score = score
-                    continue
-                batch_score_diffs.append(float(score - first_idx_score))
+            # batch_score_diffs = []
+            # prev_prompt_idx = -1
+            # first_idx_score = 0
+            # for prompt_idx,score in zip(batch.prompt_idxs, scores):
+            #     if prompt_idx != prev_prompt_idx:
+            #         prev_prompt_idx = prompt_idx
+            #         first_idx_score = score
+            #         continue
+            #     batch_score_diffs.append(float(score - first_idx_score))
 
-            # stats['mpror/score_diffs'] = score_diffs
-            stats['mpror/mean_score_diffs'] = np.mean(batch_score_diffs)
-            score_diffs.append(batch_score_diffs)
+            # # stats['mpror/score_diffs'] = score_diffs
+            # stats['mpror/mean_score_diffs'] = np.mean(batch_score_diffs)
+            # score_diffs.append(batch_score_diffs)
 
             # Pad the sample outputs
             outputs = self.tokenizer(str_outputs).input_ids
@@ -398,7 +398,7 @@ class AccelerateMPRORTrainer(AcceleratePPOTrainer):
         stats = {k: sum([xs[k] for xs in accumulated_stats]) / len(accumulated_stats) for k in stats}
         stats["kl_ctl_value"] = self.kl_ctl.value
         stats["mpror/pct_rollouts"] = np.array(pct_rollouts)
-        stats["mpror/score_diffs"] = np.array(score_diffs)
+        # stats["mpror/score_diffs"] = np.array(score_diffs)
         self.mean_kl = stats["policy/sqrt_kl"] ** 2
         self.accelerator.log(stats, step=iter_count)
 
